@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#171717">
+<meta name="description" content="Manage your money. Build your future.">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<title>Cocs Finance</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:20px;font-family:Arial,sans-serif;background:#f4f5f7;color:#222}
+.container{max-width:650px;margin:auto}
+h1{margin-bottom:5px}.subtitle{color:#777;margin-top:0}
+.card{background:white;padding:18px;border-radius:14px;margin:15px 0;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.balance{background:#171717;color:white}.balance h2{font-size:15px;font-weight:normal;color:#bbb}.balance h1{font-size:32px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat{background:white;padding:15px;border-radius:12px}.stat p{color:#777;margin:0 0 8px}.stat h2{margin:0;font-size:20px}
+.green{color:#16864a}.red{color:#d93636}
+input,select,button{width:100%;padding:13px;margin-top:10px;border:1px solid #ddd;border-radius:9px;font-size:15px}
+button{background:#171717;color:white;border:none;cursor:pointer;font-weight:bold}
+button:active{opacity:.8}
+.transaction{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid #eee}
+.transaction:last-child{border-bottom:none}.transaction small{display:block;color:#888;margin-top:5px}
+.delete{width:auto;padding:7px 10px;margin:0;background:#ffeaea;color:#d93636}
+.bar-bg{background:#eee;height:9px;border-radius:10px;margin:8px 0 15px;overflow:hidden}
+.bar{height:100%;background:#171717;border-radius:10px}
+.empty{color:#999;text-align:center;padding:20px}
+.section-title{display:flex;justify-content:space-between;align-items:center}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Cocs Finance</h1>
+<p class="subtitle">Manage your money. Build your future.</p>
+<div class="card balance"><h2>Total Balance</h2><h1 id="balance">₱0.00</h1><small>Your current financial position</small></div>
+<div class="stats">
+<div class="stat"><p>Total Income</p><h2 class="green" id="income">₱0.00</h2></div>
+<div class="stat"><p>Total Expenses</p><h2 class="red" id="expenses">₱0.00</h2></div>
+</div>
+<div class="card">
+<h3>Add Transaction</h3>
+<select id="type"><option value="income">Income</option><option value="expense">Expense</option></select>
+<input id="description" type="text" placeholder="Description">
+<input id="amount" type="number" placeholder="Amount (₱)" min="0.01" step="0.01">
+<select id="category">
+<option value="Salary">Salary</option><option value="Food">Food</option><option value="Transportation">Transportation</option><option value="Bills">Bills</option><option value="Shopping">Shopping</option><option value="Savings">Savings</option><option value="Business">Business</option><option value="Other">Other</option>
+</select>
+<button onclick="addTransaction()">Add Transaction</button>
+</div>
+<div class="card">
+<h3>Monthly Report</h3>
+<input type="month" id="month" onchange="render()">
+<div class="stats">
+<div class="stat"><p>Monthly Income</p><h2 class="green" id="monthlyIncome">₱0.00</h2></div>
+<div class="stat"><p>Monthly Expenses</p><h2 class="red" id="monthlyExpenses">₱0.00</h2></div>
+</div>
+<h3>Spending by Category</h3><div id="categoryReport"></div>
+</div>
+<div class="card">
+<h3>Data Protection</h3><p>Keep your financial records safe.</p>
+<button onclick="backupData()">Download Backup</button>
+<input type="file" id="backupFile" accept=".json,application/json" hidden onchange="restoreData(event)">
+<button onclick="document.getElementById('backupFile').click()">Restore Backup</button>
+</div>
+<div class="card">
+<h3>Transaction History</h3>
+<input type="text" id="searchInput" placeholder="Search transactions..." oninput="render()">
+<select id="filterType" onchange="render()"><option value="all">All transactions</option><option value="income">Income only</option><option value="expense">Expenses only</option></select>
+<select id="filterCategory" onchange="render()">
+<option value="all">All categories</option><option value="Salary">Salary</option><option value="Food">Food</option><option value="Transportation">Transportation</option><option value="Bills">Bills</option><option value="Shopping">Shopping</option><option value="Savings">Savings</option><option value="Business">Business</option><option value="Other">Other</option>
+</select>
+<div class="section-title"><h3>Transactions</h3><small id="count">0 records</small></div>
+<div id="history"></div>
+</div>
+</div>
+<script>
+const STORAGE_KEY="cocsFinanceTransactions";
+let transactions=[];
+try{transactions=JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");if(!Array.isArray(transactions))transactions=[];}catch{transactions=[];}
+function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(transactions));}
+function money(value){return "₱"+Number(value).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function addTransaction(){
+const type=document.getElementById("type").value;
+const description=document.getElementById("description").value.trim();
+const amount=Number(document.getElementById("amount").value);
+const category=document.getElementById("category").value;
+if(!description||!Number.isFinite(amount)||amount<=0){alert("Please enter a description and a valid amount.");return;}
+transactions.unshift({id:Date.now().toString()+Math.random(),type,description,amount,category,date:new Date().toISOString()});
+save();document.getElementById("description").value="";document.getElementById("amount").value="";render();
+}
+function deleteTransaction(id){if(!confirm("Delete this transaction?"))return;transactions=transactions.filter(item=>item.id!==id);save();render();}
+function escapeHTML(value){return String(value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));}
+function render(){
+const balance=transactions.reduce((total,item)=>total+(item.type==="income"?item.amount:-item.amount),0);
+const income=transactions.filter(item=>item.type==="income").reduce((sum,item)=>sum+item.amount,0);
+const expenses=transactions.filter(item=>item.type==="expense").reduce((sum,item)=>sum+item.amount,0);
+document.getElementById("balance").textContent=money(balance);
+document.getElementById("income").textContent=money(income);
+document.getElementById("expenses").textContent=money(expenses);
+const selectedMonth=document.getElementById("month").value;
+const monthly=transactions.filter(item=>item.date.slice(0,7)===selectedMonth);
+const monthlyIncome=monthly.filter(item=>item.type==="income").reduce((sum,item)=>sum+item.amount,0);
+const monthlyExpenses=monthly.filter(item=>item.type==="expense").reduce((sum,item)=>sum+item.amount,0);
+document.getElementById("monthlyIncome").textContent=money(monthlyIncome);
+document.getElementById("monthlyExpenses").textContent=money(monthlyExpenses);
+renderCategories(monthly);
+const search=document.getElementById("searchInput").value.toLowerCase();
+const filterType=document.getElementById("filterType").value;
+const filterCategory=document.getElementById("filterCategory").value;
+const filtered=transactions.filter(item=>
+item.description.toLowerCase().includes(search)&&
+(filterType==="all"||item.type===filterType)&&
+(filterCategory==="all"||item.category===filterCategory)
+);
+const history=document.getElementById("history");
+document.getElementById("count").textContent=filtered.length+" shown";
+if(filtered.length===0){history.innerHTML='<div class="empty">No matching transactions found.</div>';return;}
+history.innerHTML=filtered.map(item=>{
+const isIncome=item.type==="income";
+return `<div class="transaction"><div><strong>${escapeHTML(item.description)}</strong><small>${escapeHTML(item.category||"Other")} • ${new Date(item.date).toLocaleDateString()}</small></div><div style="text-align:right"><strong class="${isIncome?"green":"red"}">${isIncome?"+":"-"}${money(item.amount)}</strong><button class="delete" onclick="deleteTransaction('${item.id}')">Delete</button></div></div>`;
+}).join("");
+}
+function renderCategories(monthly){
+const expenses=monthly.filter(item=>item.type==="expense"),totals={};
+expenses.forEach(item=>{const category=item.category||"Other";totals[category]=(totals[category]||0)+item.amount;});
+const container=document.getElementById("categoryReport");
+const entries=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+if(!entries.length){container.innerHTML='<p class="empty">No spending data this month.</p>';return;}
+const total=expenses.reduce((sum,item)=>sum+item.amount,0);
+container.innerHTML=entries.map(([category,amount])=>{const percentage=amount/total*100;return `<div><div class="section-title"><strong>${escapeHTML(category)}</strong><span>${money(amount)}</span></div><div class="bar-bg"><div class="bar" style="width:${percentage}%"></div></div></div>`;}).join("");
+}
+function backupData(){
+const backup={app:"Cocs Finance",version:1,exportedAt:new Date().toISOString(),transactions};
+const file=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
+const url=URL.createObjectURL(file),link=document.createElement("a");
+link.href=url;link.download="cocs-finance-backup.json";link.click();URL.revokeObjectURL(url);
+}
+function restoreData(event){
+const file=event.target.files[0];if(!file)return;
+const reader=new FileReader();
+reader.onload=function(e){try{
+const backup=JSON.parse(e.target.result);
+if(backup.app!=="Cocs Finance"||!Array.isArray(backup.transactions))throw Error();
+const valid=backup.transactions.every(item=>item&&typeof item.id==="string"&&["income","expense"].includes(item.type)&&typeof item.description==="string"&&Number.isFinite(item.amount)&&item.amount>0&&typeof item.category==="string"&&typeof item.date==="string"&&!isNaN(Date.parse(item.date)));
+if(!valid)throw Error();
+if(!confirm("Restoring will replace your current transactions. Continue?"))return;
+transactions=backup.transactions;save();render();alert("Transactions restored!");
+}catch{alert("Unable to restore. Please select a valid Cocs Finance backup.");}finally{event.target.value="";}};
+reader.onerror=()=>{alert("Unable to read backup file.");event.target.value="";};
+reader.readAsText(file);
+}
+document.getElementById("month").value=new Date().toISOString().slice(0,7);
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
+render();
+</script>
+</body>
+</html>
